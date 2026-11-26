@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Markdown Viewer</title>
+<style>
+  :root {
+    --ui-bg: #ffffff;
+    --ui-toolbar-bg: #f8f9fa;
+    --ui-fg: #1f1f1f;
+    --ui-border: #d8d8d8;
+    --ui-muted: #6b6b6b;
+    --ui-accent: #0b57d0;
+    --ui-btn-hover: rgba(11, 87, 208, 0.08);
+    --ui-btn-active-bg: #0b57d0;
+    --ui-btn-active-fg: #ffffff;
+  }
+  html[data-theme="dark"] {
+    --ui-bg: #1e1e1e;
+    --ui-toolbar-bg: #252526;
+    --ui-fg: #d4d4d4;
+    --ui-border: #3c3c3c;
+    --ui-muted: #9d9d9d;
+    --ui-accent: #4daafc;
+    --ui-btn-hover: rgba(77, 170, 252, 0.14);
+    --ui-btn-active-bg: #0e639c;
+    --ui-btn-active-fg: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: var(--ui-bg);
+    color: var(--ui-fg);
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header.app-toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    background: var(--ui-toolbar-bg);
+    border-bottom: 1px solid var(--ui-border);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  header.app-toolbar .title {
+    font-weight: 600;
+    margin-right: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  header.app-toolbar .title small {
+    font-weight: 400;
+    color: var(--ui-muted);
+    margin-left: 8px;
+  }
+  .seg-group {
+    display: inline-flex;
+    border: 1px solid var(--ui-border);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .seg-group button {
+    border: 0;
+    border-radius: 0;
+    border-right: 1px solid var(--ui-border);
+    padding: 4px 10px;
+  }
+  .seg-group button:last-child { border-right: 0; }
+  .seg-group button.active {
+    background: var(--ui-btn-active-bg);
+    color: var(--ui-btn-active-fg);
+  }
+  header.app-toolbar button {
+    font: inherit;
+    color: var(--ui-fg);
+    background: transparent;
+    border: 1px solid var(--ui-border);
+    border-radius: 5px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: background-color .12s, border-color .12s, color .12s;
+  }
+  header.app-toolbar button.active {
+    background: var(--ui-btn-active-bg);
+    border-color: var(--ui-btn-active-bg);
+    color: var(--ui-btn-active-fg);
+  }
+  header.app-toolbar button:hover:not(.active) {
+    border-color: var(--ui-accent);
+    color: var(--ui-accent);
+    background: var(--ui-btn-hover);
+  }
+  main.app-main {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+  }
+  .pane {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .editor-pane {
+    flex: 0 0 42%;
+    border-right: 1px solid var(--ui-border);
+  }
+  .preview-pane {
+    flex: 1 1 auto;
+    background: var(--ui-bg);
+  }
+  body[data-mode="preview"] .editor-pane { display: none; }
+  body[data-mode="preview"] .preview-pane .pane-label { display: none; }
+  body[data-mode="edit"] .preview-pane { display: none; }
+  body[data-mode="edit"] .editor-pane { flex: 1 1 auto; border-right: 0; }
+
+  .pane-label {
+    flex: 0 0 auto;
+    padding: 4px 12px;
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ui-muted);
+    border-bottom: 1px solid var(--ui-border);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  textarea#src {
+    flex: 1 1 auto;
+    width: 100%;
+    resize: none;
+    border: 0;
+    outline: none;
+    padding: 16px 18px;
+    background: transparent;
+    color: inherit;
+    font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    tab-size: 2;
+  }
+  #preview-scroll {
+    flex: 1 1 auto;
+    overflow: auto;
+    min-height: 0;
+  }
+  #preview.markdown-body {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px 36px 48px;
+    transition: max-width .15s ease;
+  }
+  body[data-wide="1"] #preview.markdown-body {
+    max-width: none;
+    padding: 24px 40px 48px;
+  }
+  body[data-mode="split"] #preview.markdown-body {
+    max-width: none;
+    padding: 18px 26px 40px;
+  }
+  .drop-hint {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--ui-bg) 85%, transparent);
+    border: 3px dashed var(--ui-accent);
+    font-size: 18px; color: var(--ui-accent);
+    pointer-events: none;
+    z-index: 9999;
+  }
+  body.dragging .drop-hint { display: flex; }
+  @media (max-width: 820px) {
+    main.app-main { flex-direction: column; }
+    .editor-pane { flex: 0 0 45%; border-right: 0; border-bottom: 1px solid var(--ui-border); }
+  }
+</style>
+<style id="md-dynamic-style"></style>
+</head>
+<body data-mode="split">
+  <header class="app-toolbar">
+    <span class="title" id="doc-title">Markdown Viewer<small id="doc-subtitle">markdown-it · highlight.js · mermaid · katex</small></span>
+    <div class="seg-group" role="group" aria-label="视图模式">
+      <button id="mode-preview" data-mode="preview" title="纯预览">预览</button>
+      <button id="mode-split" data-mode="split" class="active" title="分屏对照">分屏</button>
+      <button id="mode-edit" data-mode="edit" title="纯编辑">编辑</button>
+    </div>
+    <button id="wide" title="切换宽屏阅读 (⇧⌘W)">宽屏</button>
+    <button id="fullscreen" title="切换全屏模式 (⌃⌘F)">全屏</button>
+    <button id="open">打开</button>
+    <button id="export">导出 HTML</button>
+    <button id="theme">深色</button>
+    <input id="file" type="file" accept=".md,.markdown,.mdown,.mkd,.txt" hidden>
+  </header>
+  <main class="app-main">
+    <div class="pane editor-pane">
+      <div class="pane-label">Markdown</div>
+      <textarea id="src" spellcheck="false"></textarea>
+    </div>
+    <div class="pane preview-pane">
+      <div class="pane-label">Preview</div>
+      <div id="preview-scroll">
+        <article id="preview" class="markdown-body vscode-light"></article>
+      </div>
+    </div>
+  </main>
+  <div class="drop-hint">松开以打开 Markdown 文件</div>
+
+  <script src="vendor/markdown-it.min.js"></script>
+  <script src="vendor/highlight.min.js"></script>
+  <script src="vendor/katex.min.js"></script>
+  <script src="vendor/mermaid.min.js"></script>
+  <script src="vendor/styles.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

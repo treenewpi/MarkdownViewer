@@ -1,0 +1,66 @@
+name: Release macOS App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build MarkdownViewer.app
+        run: |
+          chmod +x build.sh install.sh
+          ./build.sh
+          codesign --verify --deep --strict MarkdownViewer.app
+
+      - name: Package zip and checksum
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          ARCH=$(uname -m)
+          ZIP="MarkdownViewer-${TAG}-macOS-${ARCH}.zip"
+          ditto -c -k --sequesterRsrc --keepParent MarkdownViewer.app "$ZIP"
+          shasum -a 256 "$ZIP" > checksums.txt
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat << 'EOF' > release-notes.md
+          ## Markdown Viewer
+
+          原生 Swift + WKWebView 的 macOS 离线 Markdown 阅读器，渲染效果与 Antigravity IDE / VS Code 对齐。
+
+          ### 主要特性
+          - **本地图片完整支持**：原生 `WKURLSchemeHandler`（`mdlocal://`）支持相对路径、绝对路径、含空格/中文路径及 `file://` 图片；导出 HTML 自动内联本地图片。
+          - **Mermaid 图表离线渲染**：内置 `mermaid@11`，支持 `pie`、`xychart-beta`、`flowchart`、`sequenceDiagram`、`classDiagram`、`stateDiagram`、`erDiagram` 等，自动跟随深浅色主题。
+          - **KaTeX 数学公式**：离线内联字体，支持行内 `$...$` / `\(...\)` 与块级 `$$...$$` / `\[...\]`。
+          - **GitHub Alerts 与 VS Code 样式**：支持 `[!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]` 与完整的 `.vscode-light` / `.vscode-dark` 高亮样式。
+          - **宽屏 / 全屏 / 视图切换**：支持预览、分屏、编辑切换，宽屏模式（`⇧⌘W`）与 macOS 原生全屏（`⌃⌘F`）。
+
+          ### 安装说明
+          1. 下载下方 `.zip` 并解压得到 `MarkdownViewer.app`，拖入 `/Applications`。
+          2. 由于采用 ad-hoc 签名，首次打开请右键 →「打开」，或在终端执行：
+             ```bash
+             xattr -dr com.apple.quarantine /Applications/MarkdownViewer.app
+             ```
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" checksums.txt --clobber
+          else
+            gh release create "$TAG" "$ZIP" checksums.txt \
+              --title "Markdown Viewer ${TAG}" \
+              --notes-file release-notes.md
+          fi
