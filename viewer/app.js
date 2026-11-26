@@ -212,9 +212,9 @@
       return pre + pushMath(expr, false);
     });
 
-    // Inline math: $ ... $ (avoid matching currency like $100 ... $200)
-    protectedText = protectedText.replace(/(^|[^\\$])\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)/g, function (m, pre, expr) {
-      if (/^\d+(?:[.,]\d+)?$/.test(expr.trim())) return m;
+    // Inline math: $ ... $ (avoid matching currency like $100 ... $200; no regex lookbehind for Safari 15 / macOS 12 compat)
+    protectedText = protectedText.replace(/(^|[^\\$])\$(?!\s)([^$\n]+?)\$(?!\d)/g, function (m, pre, expr) {
+      if (/\s$/.test(expr) || /^\d+(?:[.,]\d+)?$/.test(expr.trim())) return m;
       return pre + pushMath(expr, false);
     });
 

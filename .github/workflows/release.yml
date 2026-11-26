@@ -11,23 +11,30 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build MarkdownViewer.app
+      - name: Build MarkdownViewer.app (macOS 12.0+ Universal)
         run: |
           chmod +x build.sh install.sh
-          ./build.sh
+          MIN_MACOS=12.0 ./build.sh
           codesign --verify --deep --strict MarkdownViewer.app
+          lipo -info MarkdownViewer.app/Contents/MacOS/MarkdownViewer
+          otool -l MarkdownViewer.app/Contents/MacOS/MarkdownViewer | grep -A 4 LC_BUILD_VERSION
 
       - name: Package zip and checksum
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          ARCH=$(uname -m)
-          ZIP="MarkdownViewer-${TAG}-macOS-${ARCH}.zip"
+          ARCHS=$(lipo -archs MarkdownViewer.app/Contents/MacOS/MarkdownViewer)
+          if echo "$ARCHS" | grep -q "arm64" && echo "$ARCHS" | grep -q "x86_64"; then
+            SUFFIX="universal"
+          else
+            SUFFIX="$(uname -m)"
+          fi
+          ZIP="MarkdownViewer-${TAG}-macOS-${SUFFIX}.zip"
           ditto -c -k --sequesterRsrc --keepParent MarkdownViewer.app "$ZIP"
           shasum -a 256 "$ZIP" > checksums.txt
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
@@ -41,6 +48,10 @@ jobs:
           ## Markdown Viewer
 
           原生 Swift + WKWebView 的 macOS 离线 Markdown 阅读器，渲染效果与 Antigravity IDE / VS Code 对齐。
+
+          ### 系统兼容性
+          - 支持 **macOS 12.0 Monterey 及以上版本**（覆盖 Monterey 12 / Ventura 13 / Sonoma 14 / Sequoia 15+）。
+          - 通用二进制（Apple Silicon `arm64` + Intel `x86_64`）。
 
           ### 主要特性
           - **本地图片完整支持**：原生 `WKURLSchemeHandler`（`mdlocal://`）支持相对路径、绝对路径、含空格/中文路径及 `file://` 图片；导出 HTML 自动内联本地图片。
